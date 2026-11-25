@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Internal Server Error — EnerTrack{% endblock %}
+{% block header_title %}500 — Server Error{% endblock %}
+
+{% block content %}
+<div class="card col-12" style="max-width: 550px; margin: 4rem auto; text-align: center; padding: 3rem 2rem;">
+  <div style="font-size: 3.5rem; font-weight: 800; color: var(--neon-rose); margin-bottom: 0.5rem; line-height: 1;">500</div>
+  <h2 style="font-size: 1.35rem; font-weight: 700; margin-bottom: 0.75rem;">Internal Processing Exception</h2>
+  <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1.75rem;">
+    The application encountered an unexpected error while processing your request. The incident has been safely logged.
+  </p>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="display: inline-flex;">
+    Return to Dashboard
+  </a>
+</div>
+{% endblock %}

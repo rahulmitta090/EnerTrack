@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block title %}Households — EnerTrack{% endblock %}
+{% block header_title %}Household Management{% endblock %}
+
+{% block header_actions %}
+  <button class="btn btn-primary" onclick="openModal('addHouseholdModal')">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    Add Household
+  </button>
+{% endblock %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem;">
+  {% for item in household_cards %}
+    {% set h = item.household %}
+    {% set s = item.summary %}
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div class="card-header" style="margin-bottom: 0.75rem;">
+          <div>
+            <h3 class="card-title" style="font-size: 1.15rem;">{{ h.household_name }}</h3>
+            <span style="font-size: 0.78rem; color: var(--text-muted);">{{ h.city }} &bull; {{ h.household_type }}</span>
+          </div>
+          <span class="pill pill-normal" style="font-size: 0.75rem;">{{ h.number_of_members }} Members</span>
+        </div>
+
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.4rem;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          {{ h.address }}
+        </div>
+
+        <!-- Telemetry Summary Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: rgba(15, 23, 42, 0.6); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 1rem;">
+          <div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Consumption</div>
+            <div style="font-size: 1.15rem; font-weight: 700; color: var(--neon-cyan); margin-top: 0.15rem;">
+              {{ s.total_kwh|round(1) }} <span style="font-size: 0.75rem; color: var(--text-muted);">kWh</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Anomalies</div>
+            <div style="font-size: 1.15rem; font-weight: 700; color: {% if s.total_anomalies > 0 %}var(--neon-amber){% else %}var(--neon-green){% endif %}; margin-top: 0.15rem;">
+              {{ s.total_anomalies }} ({{ s.high_priority_count }} High)
+            </div>
+          </div>
+        </div>
+
+        <!-- Attached Smart Meters -->
+        <div style="margin-bottom: 1.25rem;">
+          <div style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.4rem;">
+            Connected Smart Meters ({{ item.meters|length }})
+          </div>
+          {% if item.meters %}
+            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+              {% for m in item.meters %}
+                <span class="pill pill-source-simulated" style="font-size: 0.72rem;">
+                  {{ m.meter_number }} &bull; {{ m.status }}
+                </span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <span style="font-size: 0.78rem; color: var(--text-muted); font-style: italic;">No meters registered yet.</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; gap: 0.5rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem;">
+        <a href="{{ url_for('dashboard', household_id=h.household_id) }}" class="btn btn-secondary btn-sm" style="flex: 1;">
+          View Analytics
+        </a>
+        <button class="btn btn-secondary btn-sm" onclick="editHouseholdModal({{ h.to_dict()|tojson }})">
+          Edit
+        </button>
+        <form method="POST" action="{{ url_for('delete_household', household_id=h.household_id) }}" onsubmit="return confirm('Delete this household and all linked smart meters and telemetry data?');">
+          <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <div class="card col-12">
+      <div class="empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+        <div class="empty-title">No Households Registered</div>
+        <div class="empty-description">Get started by creating your first residential household record.</div>
+        <button class="btn btn-primary" onclick="openModal('addHouseholdModal')">Add Household</button>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Add Household Modal -->
+<div id="addHouseholdModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Register New Household</h3>
+      <button class="modal-close" onclick="closeModal('addHouseholdModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('add_household') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="add_hname">Household Name *</label>
+          <input type="text" id="add_hname" name="household_name" class="form-control" placeholder="e.g. Maplewood Residence" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add_address">Street Address *</label>
+          <input type="text" id="add_address" name="address" class="form-control" placeholder="e.g. 104 Maple Street" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="add_city">City *</label>
+          <input type="text" id="add_city" name="city" class="form-control" placeholder="e.g. Springfield" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="add_type">Property Type</label>
+            <select id="add_type" name="household_type" class="form-select">
+              <option value="Apartment">Apartment</option>
+              <option value="Detached House" selected>Detached House</option>
+              <option value="Semi-Detached">Semi-Detached</option>
+              <option value="Villa">Villa</option>
+              <option value="Condominium">Condominium</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="add_members">Occupants Count</label>
+            <input type="number" id="add_members" name="number_of_members" class="form-control" min="1" max="25" value="3" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addHouseholdModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create Household</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Household Modal -->
+<div id="editHouseholdModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Household Profile</h3>
+      <button class="modal-close" onclick="closeModal('editHouseholdModal')">&times;</button>
+    </div>
+    <form id="editHouseholdForm" method="POST" action="">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="edit_hname">Household Name *</label>
+          <input type="text" id="edit_hname" name="household_name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit_address">Street Address *</label>
+          <input type="text" id="edit_address" name="address" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="edit_city">City *</label>
+          <input type="text" id="edit_city" name="city" class="form-control" required>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="edit_type">Property Type</label>
+            <select id="edit_type" name="household_type" class="form-select">
+              <option value="Apartment">Apartment</option>
+              <option value="Detached House">Detached House</option>
+              <option value="Semi-Detached">Semi-Detached</option>
+              <option value="Villa">Villa</option>
+              <option value="Condominium">Condominium</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit_members">Occupants Count</label>
+            <input type="number" id="edit_members" name="number_of_members" class="form-control" min="1" max="25" required>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('editHouseholdModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update Household</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editHouseholdModal(h) {
+  document.getElementById("editHouseholdForm").action = `/households/${h.household_id}/edit`;
+  document.getElementById("edit_hname").value = h.household_name;
+  document.getElementById("edit_address").value = h.address;
+  document.getElementById("edit_city").value = h.city;
+  document.getElementById("edit_type").value = h.household_type;
+  document.getElementById("edit_members").value = h.number_of_members;
+  openModal("editHouseholdModal");
+}
+</script>
+{% endblock %}

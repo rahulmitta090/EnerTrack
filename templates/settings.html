@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings — EnerTrack{% endblock %}
+{% block header_title %}System Configuration{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+  <div class="card col-12">
+    <div class="card-header">
+      <div>
+        <h3 class="card-title">Utility Tariff & Machine Learning Configuration</h3>
+        <p class="card-subtitle">Adjust billing parameters and ML detection hyper-parameters</p>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('settings_view') }}">
+      <!-- Section 1: Billing & Currency -->
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--neon-cyan); margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-subtle);">
+          1. Billing & Electricity Tariff
+        </h4>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+          <div class="form-group">
+            <label class="form-label" for="tariff_input">Configured Tariff per kWh *</label>
+            <input type="number" step="0.001" min="0" id="tariff_input" name="tariff_per_kwh" class="form-control" value="{{ configs.get('tariff_per_kwh', '0.15') }}" required>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Used to calculate estimated electricity costs and monetary impact of excess consumption.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="currency_input">Currency Symbol *</label>
+            <input type="text" id="currency_input" name="currency_symbol" class="form-control" value="{{ configs.get('currency_symbol', '$') }}" required maxlength="4">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Display symbol for billing projections (e.g., $, &euro;, &pound;, &#8377;).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Machine Learning Parameters -->
+      <div style="margin-bottom: 2rem;">
+        <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--neon-blue); margin-bottom: 1rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-subtle);">
+          2. Machine Learning Anomaly Detection Engine
+        </h4>
+
+        <div class="form-group">
+          <label class="form-label" for="contam_input">Isolation Forest Contamination Rate (0.01 - 0.20)</label>
+          <input type="number" step="0.005" min="0.01" max="0.20" id="contam_input" name="iforest_contamination" class="form-control" value="{{ configs.get('iforest_contamination', '0.05') }}" required>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+            Represents the expected proportion of anomalous outliers in smart-meter datasets (default: 0.05 = 5%).
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;">
+          <div class="form-group">
+            <label class="form-label" for="clusters_input">K-Means Clusters (2 - 8)</label>
+            <input type="number" id="clusters_input" name="kmeans_clusters" class="form-control" value="{{ configs.get('kmeans_clusters', '4') }}" min="2" max="8" required>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Partitions diurnal usage patterns (e.g. overnight baseload, morning, midday, evening peak).
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="zscore_input">Statistical Z-Score Threshold (1.5 - 5.0)</label>
+            <input type="number" step="0.1" id="zscore_input" name="zscore_threshold" class="form-control" value="{{ configs.get('zscore_threshold', '2.5') }}" min="1.5" max="5.0" required>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+              Standard deviations above dynamic household time-of-day mean required for High-Priority classification.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--border-subtle); padding-top: 1.25rem; display: flex; justify-content: flex-end;">
+        <button type="submit" class="btn btn-primary" style="padding: 0.65rem 1.75rem;">
+          Save Configuration
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

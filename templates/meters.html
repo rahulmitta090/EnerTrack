@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Meters — EnerTrack{% endblock %}
+{% block header_title %}Smart Meter Management{% endblock %}
+
+{% block header_actions %}
+  <button class="btn btn-primary" onclick="openModal('registerMeterModal')">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+    Register Smart Meter
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="card col-12">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Connected Smart Meters</h3>
+      <p class="card-subtitle">Manage physical and simulated energy metering hardware endpoints</p>
+    </div>
+  </div>
+
+  {% if meter_details %}
+    <div class="table-container">
+      <table class="table-custom">
+        <thead>
+          <tr>
+            <th>Serial Number</th>
+            <th>Household</th>
+            <th>Hardware Model</th>
+            <th>Installation Date</th>
+            <th>Status</th>
+            <th>Lifetime Total</th>
+            <th>Readings</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in meter_details %}
+            {% set m = item.meter %}
+            <tr>
+              <td>
+                <strong style="color: var(--neon-cyan); letter-spacing: 0.03em;">{{ m.meter_number }}</strong>
+              </td>
+              <td>{{ m.household_name }}</td>
+              <td>{{ m.meter_type }}</td>
+              <td>{{ m.installation_date }}</td>
+              <td>
+                <span class="pill {% if m.status == 'Active' %}pill-normal{% else %}pill-high-priority{% endif %}">
+                  {{ m.status }}
+                </span>
+              </td>
+              <td><strong>{{ item.total_kwh }} kWh</strong></td>
+              <td>{{ item.reading_count }} logs</td>
+              <td>
+                <div style="display: flex; gap: 0.4rem;">
+                  <!-- Toggle Active/Inactive Status -->
+                  <form method="POST" action="{{ url_for('toggle_meter', meter_id=m.meter_id) }}">
+                    <button type="submit" class="btn btn-secondary btn-sm" title="Toggle Active / Inactive">
+                      {% if m.status == 'Active' %}Deactivate{% else %}Activate{% endif %}
+                    </button>
+                  </form>
+                  <!-- Edit Config -->
+                  <button class="btn btn-secondary btn-sm" onclick="editMeterModal({{ m.to_dict()|tojson }})">
+                    Edit
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>
+      <div class="empty-title">No Smart Meters Registered</div>
+      <div class="empty-description">Link a smart meter device to a household property to start collecting energy telemetry.</div>
+      <button class="btn btn-primary" onclick="openModal('registerMeterModal')">Register First Meter</button>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Register Smart Meter Modal -->
+<div id="registerMeterModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Register Smart Meter Device</h3>
+      <button class="modal-close" onclick="closeModal('registerMeterModal')">&times;</button>
+    </div>
+    <form method="POST" action="{{ url_for('add_meter') }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="meter_household">Target Household *</label>
+          <select id="meter_household" name="household_id" class="form-select" required>
+            {% for h in households %}
+              <option value="{{ h.household_id }}">{{ h.household_name }} ({{ h.city }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="meter_number">Meter Serial Code *</label>
+          <input type="text" id="meter_number" name="meter_number" class="form-control" placeholder="e.g. SM-2026-X890" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="meter_type">Meter Hardware Type</label>
+          <select id="meter_type" name="meter_type" class="form-select">
+            <option value="Smart Digital Bi-Directional">Smart Digital Bi-Directional</option>
+            <option value="Single-Phase Precision Meter">Single-Phase Precision Meter</option>
+            <option value="Three-Phase Industrial/Commercial">Three-Phase Industrial/Commercial</option>
+            <option value="Standard AMI Smart Meter" selected>Standard AMI Smart Meter</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="inst_date">Installation Date</label>
+          <input type="date" id="inst_date" name="installation_date" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('registerMeterModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Register Meter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Smart Meter Modal -->
+<div id="editMeterModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="modal-title">Edit Meter Configuration</h3>
+      <button class="modal-close" onclick="closeModal('editMeterModal')">&times;</button>
+    </div>
+    <form id="editMeterForm" method="POST" action="">
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Serial Number</label>
+          <input type="text" id="edit_meter_num" class="form-control" disabled style="opacity: 0.7;">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit_mtype">Hardware Type</label>
+          <select id="edit_mtype" name="meter_type" class="form-select">
+            <option value="Smart Digital Bi-Directional">Smart Digital Bi-Directional</option>
+            <option value="Single-Phase Precision Meter">Single-Phase Precision Meter</option>
+            <option value="Three-Phase Industrial/Commercial">Three-Phase Industrial/Commercial</option>
+            <option value="Standard AMI Smart Meter">Standard AMI Smart Meter</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="edit_status">Operational Status</label>
+          <select id="edit_status" name="status" class="form-select">
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Maintenance">Maintenance</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('editMeterModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editMeterModal(m) {
+  document.getElementById("editMeterForm").action = `/meters/${m.meter_id}/edit`;
+  document.getElementById("edit_meter_num").value = m.meter_number;
+  document.getElementById("edit_mtype").value = m.meter_type;
+  document.getElementById("edit_status").value = m.status;
+  openModal("editMeterModal");
+}
+</script>
+{% endblock %}

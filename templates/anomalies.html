@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}ML Anomaly Investigation — EnerTrack{% endblock %}
+{% block header_title %}Machine Learning Anomaly Investigation{% endblock %}
+
+{% block header_actions %}
+  <form method="POST" action="{{ url_for('run_anomaly_detector') }}">
+    {% if selected_household_id %}
+      <input type="hidden" name="household_id" value="{{ selected_household_id }}">
+    {% endif %}
+    <button type="submit" class="btn btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      Run Anomaly Pipeline
+    </button>
+  </form>
+{% endblock %}
+
+{% block content %}
+<!-- Machine Learning Pipeline Architecture Banner -->
+<div class="card col-12" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, rgba(20, 30, 51, 0.9) 0%, rgba(13, 21, 39, 0.95) 100%); border-left: 4px solid var(--neon-cyan);">
+  <div style="display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap;">
+    <div style="width: 42px; height: 42px; border-radius: var(--radius-sm); background: rgba(6, 182, 212, 0.15); display: flex; align-items: center; justify-content: center; color: var(--neon-cyan); flex-shrink: 0;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+    </div>
+    <div style="flex: 1; min-width: 280px;">
+      <h3 style="font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">
+        Scikit-Learn Multi-Stage Anomaly Detection Pipeline
+      </h3>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45; margin-bottom: 0.5rem;">
+        Combines <strong>K-Means Clustering</strong> (grouping temporal diurnal usage patterns into {{ ml_settings.kmeans_clusters }} clusters) with <strong>Isolation Forest</strong> outlier scoring (contamination: {{ ml_settings.iforest_contamination }}) and a dynamic per-household statistical baseline (Z-score &ge; {{ ml_settings.zscore_threshold }}).
+      </p>
+      <div style="display: flex; gap: 1.25rem; font-size: 0.78rem; color: var(--text-muted); flex-wrap: wrap;">
+        <span>&bull; Clustering flags uncharacteristic temporal regime changes.</span>
+        <span>&bull; Isolation Forest isolates non-linear consumption spikes.</span>
+        <span>&bull; Results are presented as investigation hypotheses, not accusations.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters Bar -->
+<div class="card col-12" style="margin-bottom: 1.5rem; padding: 1.15rem;">
+  <form method="GET" action="{{ url_for('anomalies_view') }}" style="display: flex; gap: 0.85rem; flex-wrap: wrap; align-items: flex-end;">
+    <div style="flex: 1; min-width: 170px;">
+      <label class="form-label" style="font-size: 0.75rem;">Household</label>
+      <select name="household_id" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;">
+        <option value="">All Accessible Households</option>
+        {% for h in households %}
+          <option value="{{ h.household_id }}" {% if selected_household_id == h.household_id %}selected{% endif %}>
+            {{ h.household_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="flex: 1; min-width: 150px;">
+      <label class="form-label" style="font-size: 0.75rem;">Severity</label>
+      <select name="severity" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;">
+        <option value="">All Severities</option>
+        <option value="High Priority" {% if selected_severity == 'High Priority' %}selected{% endif %}>High Priority</option>
+        <option value="Unusual" {% if selected_severity == 'Unusual' %}selected{% endif %}>Unusual</option>
+      </select>
+    </div>
+
+    <div style="flex: 1; min-width: 150px;">
+      <label class="form-label" style="font-size: 0.75rem;">Investigation Status</label>
+      <select name="status" class="form-select" style="padding: 0.45rem 0.75rem; font-size: 0.85rem;">
+        <option value="">All Statuses</option>
+        <option value="New" {% if selected_status == 'New' %}selected{% endif %}>New</option>
+        <option value="Under Investigation" {% if selected_status == 'Under Investigation' %}selected{% endif %}>Under Investigation</option>
+        <option value="Resolved" {% if selected_status == 'Resolved' %}selected{% endif %}>Resolved</option>
+        <option value="False Positive" {% if selected_status == 'False Positive' %}selected{% endif %}>False Positive</option>
+      </select>
+    </div>
+
+    <div style="display: flex; gap: 0.4rem;">
+      <button type="submit" class="btn btn-secondary btn-sm" style="height: 34px;">Filter</button>
+      <a href="{{ url_for('anomalies_view') }}" class="btn btn-secondary btn-sm" style="height: 34px;">Reset</a>
+    </div>
+  </form>
+</div>
+
+<!-- Anomalies Table -->
+<div class="card col-12">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Identified Energy Consumption Anomalies</h3>
+      <p class="card-subtitle">Displaying {{ anomalies|length }} flagged telemetry events</p>
+    </div>
+  </div>
+
+  {% if anomalies %}
+    <div class="table-container">
+      <table class="table-custom">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Household</th>
+            <th>Meter</th>
+            <th>Timestamp</th>
+            <th>Observed</th>
+            <th>Baseline</th>
+            <th>Deviation</th>
+            <th>Score</th>
+            <th>Method</th>
+            <th>Severity</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in anomalies %}
+            <tr>
+              <td><strong style="color: var(--neon-cyan);">#ANM-{{ a.anomaly_id }}</strong></td>
+              <td>{{ a.household_name }}</td>
+              <td><code>{{ a.meter_number }}</code></td>
+              <td style="font-size: 0.8rem; color: var(--text-secondary);">{{ a.detection_timestamp }}</td>
+              <td><strong style="color: var(--neon-rose);">{{ a.energy_kwh }} kWh</strong></td>
+              <td style="color: var(--text-muted);">{{ a.expected_kwh }} kWh</td>
+              <td>
+                <span style="color: var(--neon-amber); font-weight: 600;">
+                  +{{ a.diff_kwh }} kWh (+{{ a.pct_increase }}%)
+                </span>
+              </td>
+              <td>
+                <span style="font-family: monospace; font-size: 0.8rem; color: var(--neon-blue);">
+                  {{ "%.3f"|format(a.anomaly_score) }}
+                </span>
+              </td>
+              <td>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">{{ a.method }}</span>
+              </td>
+              <td>
+                <span class="pill pill-{{ 'high-priority' if a.severity == 'High Priority' else 'unusual' }}">
+                  {{ a.severity }}
+                </span>
+              </td>
+              <td>
+                <span class="pill pill-status-{{ a.status|lower|replace(' ', '-') }}">
+                  {{ a.status }}
+                </span>
+              </td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="viewAnomalyDetails({{ a.anomaly_id }})">
+                  Investigate
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      <div class="empty-title">No Anomalies Match Current Criteria</div>
+      <div class="empty-description">Run the ML Anomaly Detection pipeline to analyze existing smart meter telemetry.</div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Anomaly Investigation Modal -->
+<div id="anomalyDetailsModal" class="modal-backdrop">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title">Anomaly Investigation Event</h3>
+        <span id="modalAnomalyId" style="font-size: 0.85rem; color: var(--neon-cyan); font-weight: 600;"></span>
+      </div>
+      <button class="modal-close" onclick="closeModal('anomalyDetailsModal')">&times;</button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Metric Highlights -->
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.25rem;">
+        <div style="background: rgba(15, 23, 42, 0.7); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Observed Usage</div>
+          <div id="modalObservedKwh" style="font-size: 1.15rem; font-weight: 700; color: var(--neon-cyan); margin-top: 0.15rem;"></div>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Expected Baseline</div>
+          <div id="modalExpectedKwh" style="font-size: 1.15rem; font-weight: 700; color: var(--text-secondary); margin-top: 0.15rem;"></div>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.7); padding: 0.75rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Deviation</div>
+          <div id="modalDiffKwh" style="font-size: 1.15rem; font-weight: 700; color: var(--neon-amber); margin-top: 0.15rem;"></div>
+        </div>
+      </div>
+
+      <!-- Detection Metadata -->
+      <div style="background: rgba(15, 23, 42, 0.4); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); margin-bottom: 1.25rem; font-size: 0.85rem;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+          <span style="color: var(--text-muted);">Household:</span>
+          <strong id="modalHousehold"></strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+          <span style="color: var(--text-muted);">Smart Meter:</span>
+          <span id="modalMeter"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+          <span style="color: var(--text-muted);">Detection Time:</span>
+          <span id="modalTimestamp"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+          <span style="color: var(--text-muted);">Detection Algorithm:</span>
+          <span id="modalMethod" style="color: var(--neon-blue); font-weight: 600;"></span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border-subtle);">
+          <span style="color: var(--text-muted);">Severity Classification:</span>
+          <span id="modalSeverityPill"></span>
+        </div>
+      </div>
+
+      <!-- Possible Explanations -->
+      <div style="margin-bottom: 1.25rem;">
+        <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--neon-cyan); margin-bottom: 0.4rem;">
+          Automated Diagnostic Hypotheses (Potential Causes)
+        </h4>
+        <ul id="modalCausesList" style="font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; line-height: 1.45;"></ul>
+        <div style="font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin-top: 0.35rem;">
+          * Note: Hypotheses are generated algorithmic possibilities for engineering review, not confirmed root causes or proof of fault.
+        </div>
+      </div>
+
+      <!-- Recommended Corrective Actions -->
+      <div style="margin-bottom: 1.25rem;">
+        <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--neon-green); margin-bottom: 0.4rem;">
+          Recommended Next Steps
+        </h4>
+        <ul id="modalRecsList" style="font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; line-height: 1.45;"></ul>
+      </div>
+
+      <!-- Investigation Status Update Form -->
+      <form id="anomalyStatusForm" method="POST" action="">
+        <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.65rem;">
+          Update Investigation Status
+        </h4>
+        <div class="form-group">
+          <label class="form-label" for="statusSelect">Current Status</label>
+          <select id="statusSelect" name="status" class="form-select">
+            <option value="New">New</option>
+            <option value="Under Investigation">Under Investigation</option>
+            <option value="Resolved">Resolved</option>
+            <option value="False Positive">False Positive</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="statusNotes">Investigation Log & Notes</label>
+          <textarea id="statusNotes" name="notes" class="form-control" rows="3" placeholder="Log technician findings, appliance inspections, or reason for classification..."></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          Save Investigation Update
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

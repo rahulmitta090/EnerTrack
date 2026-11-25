@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Reports & Analytics — EnerTrack{% endblock %}
+{% block header_title %}Analytics & Energy Reports{% endblock %}
+
+{% block header_actions %}
+  <div style="display: flex; gap: 0.5rem;">
+    <a href="{{ url_for('export_consumption_csv', household_id=selected_household_id) }}" class="btn btn-secondary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      Export Telemetry CSV
+    </a>
+    <a href="{{ url_for('export_anomalies_csv', household_id=selected_household_id) }}" class="btn btn-primary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      Export Anomalies CSV
+    </a>
+  </div>
+{% endblock %}
+
+{% block content %}
+<!-- Executive Energy & Cost Summary Banner -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">30-Day Total Energy</span>
+      <div class="kpi-icon-bubble">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      </div>
+    </div>
+    <div class="kpi-value">{{ cost_data.total_kwh }} <span style="font-size: 1rem; color: var(--text-muted);">kWh</span></div>
+    <div class="kpi-subtitle">Across active smart meters</div>
+  </div>
+
+  <div class="kpi-card kpi-green">
+    <div class="kpi-header">
+      <span class="kpi-title">Estimated Energy Cost</span>
+      <div class="kpi-icon-bubble">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+      </div>
+    </div>
+    <div class="kpi-value" style="color: var(--neon-green);">{{ currency_symbol }}{{ cost_data.estimated_cost }}</div>
+    <div class="kpi-subtitle">Tariff: {{ currency_symbol }}{{ cost_data.tariff_per_kwh }}/kWh</div>
+  </div>
+
+  <div class="kpi-card kpi-amber">
+    <div class="kpi-header">
+      <span class="kpi-title">Spike Excess Energy</span>
+      <div class="kpi-icon-bubble">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+      </div>
+    </div>
+    <div class="kpi-value" style="color: var(--neon-amber);">{{ cost_data.excess_kwh }} <span style="font-size: 1rem; color: var(--text-muted);">kWh</span></div>
+    <div class="kpi-subtitle">Associated cost: ~{{ currency_symbol }}{{ cost_data.estimated_excess_cost }}</div>
+  </div>
+
+  <div class="kpi-card kpi-purple">
+    <div class="kpi-header">
+      <span class="kpi-title">Period-over-Period Delta</span>
+      <div class="kpi-icon-bubble">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+      </div>
+    </div>
+    <div class="kpi-value" style="color: {% if cost_data.kwh_change_pct > 0 %}var(--neon-amber){% else %}var(--neon-green){% endif %};">
+      {% if cost_data.kwh_change_pct > 0 %}+{% endif %}{{ cost_data.kwh_change_pct }}%
+    </div>
+    <div class="kpi-subtitle">Compared to prior 30 days</div>
+  </div>
+</div>
+
+<!-- Household Consumption & Anomaly Summary Table -->
+<div class="card col-12" style="margin-bottom: 2rem;">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Household Analytics Breakdown</h3>
+      <p class="card-subtitle">Aggregated consumption, cost projections, and investigation states</p>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <table class="table-custom">
+      <thead>
+        <tr>
+          <th>Household Name</th>
+          <th>City</th>
+          <th>Property Type</th>
+          <th>Total Consumption</th>
+          <th>Estimated Cost</th>
+          <th>Total Anomalies</th>
+          <th>High Priority</th>
+          <th>Active Review</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in household_summaries %}
+          {% set h = item.household %}
+          <tr>
+            <td><strong>{{ h.household_name }}</strong></td>
+            <td>{{ h.city }}</td>
+            <td>{{ h.household_type }}</td>
+            <td><strong style="color: var(--neon-cyan);">{{ item.total_kwh }} kWh</strong></td>
+            <td><strong style="color: var(--neon-green);">{{ currency_symbol }}{{ item.estimated_cost }}</strong></td>
+            <td>
+              <span class="pill {% if item.total_anomalies > 0 %}pill-unusual{% else %}pill-normal{% endif %}">
+                {{ item.total_anomalies }}
+              </span>
+            </td>
+            <td>
+              {% if item.high_priority > 0 %}
+                <span class="pill pill-high-priority">{{ item.high_priority }}</span>
+              {% else %}
+                <span style="color: var(--text-muted); font-size: 0.8rem;">0</span>
+              {% endif %}
+            </td>
+            <td>{{ item.active_anomalies }}</td>
+            <td>
+              <a href="{{ url_for('dashboard', household_id=h.household_id) }}" class="btn btn-secondary btn-sm">
+                Dashboard
+              </a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Export Data Centre -->
+<div class="card col-12">
+  <div class="card-header">
+    <div>
+      <h3 class="card-title">Export Telemetry & Diagnostic Datasets</h3>
+      <p class="card-subtitle">Download structured CSV files for utility auditing, offline reporting, or external compliance</p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+    <!-- Export Card 1 -->
+    <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <h4 style="font-size: 1rem; font-weight: 700; color: var(--neon-blue); margin-bottom: 0.35rem;">
+          Raw Consumption Telemetry
+        </h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+          Includes timestamp, energy in kWh, voltage readings, calculated current, data source tags (simulated vs. imported), and meter serials.
+        </p>
+      </div>
+      <a href="{{ url_for('export_consumption_csv', household_id=selected_household_id) }}" class="btn btn-secondary btn-sm" style="width: 100%;">
+        Download Consumption CSV
+      </a>
+    </div>
+
+    <!-- Export Card 2 -->
+    <div style="background: rgba(15, 23, 42, 0.6); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <h4 style="font-size: 1rem; font-weight: 700; color: var(--neon-rose); margin-bottom: 0.35rem;">
+          Anomaly Investigation Log
+        </h4>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem; line-height: 1.4;">
+          Includes observed vs. baseline kWh, percentage deviation, Isolation Forest/K-Means scores, severity classification, and technician notes.
+        </p>
+      </div>
+      <a href="{{ url_for('export_anomalies_csv', household_id=selected_household_id) }}" class="btn btn-primary btn-sm" style="width: 100%;">
+        Download Anomalies CSV
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
